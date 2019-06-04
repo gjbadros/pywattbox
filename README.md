@@ -2,6 +2,8 @@ pywattbox 0.0.3
 ===============
 A simple Python library for controlling a WattBox IP-controlled outlet.
 
+Note that on PyPi, this is pysnapavwattbox
+
 
 Authors
 -------

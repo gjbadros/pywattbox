@@ -1,7 +1,7 @@
 from distutils.core import setup
 
 setup(
-    name = 'pywattbox',
+    name = 'pysnapavwattbox',
     version = '0.0.3',
     license = 'MIT',
     description = 'Python library for WattBox IP-controlled outlets, used for Home Assistant',
