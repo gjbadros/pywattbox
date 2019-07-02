@@ -89,8 +89,12 @@ class WattBox(object):
     def load_xml(self):
         """Load the WattBox status from the device."""
         url = 'http://{h}/wattbox_info.xml'.format(h=self._host)
-        response = requests.get(url, auth=(self._username, self._password),
-                                verify=False)
+        try:
+            response = requests.get(url, auth=(self._username, self._password),
+                                    verify=False)
+        except requests.exceptions.ConnectionError as e:
+            _LOGGER.warning("Could not load_xml from wattbox at %s - error %s", url, e)
+            raise
         xml_str = response.text
         _LOGGER.debug("Loaded xml status = %s", xml_str)
         parser = WattBoxXmlParser(self, xml_str)
@@ -189,9 +193,13 @@ class Switch(object):
         _LOGGER.debug("Sending wattbox %s url %s",
                       self._wattbox._hostname, url)
         if not self._wattbox._noop_set_state:
-            response = requests.get(url, auth=(self._wattbox._username,
-                                               self._wattbox._password),
-                                    verify=False)
+            try:
+                response = requests.get(url, auth=(self._wattbox._username,
+                                                   self._wattbox._password),
+                                        verify=False)
+            except requests.exceptions.ConnectionError as e:
+                _LOGGER.warning("Could not reach wattbox at %s - error %s", url, e)
+                return
             self._update(response.text)
         else:
             _LOGGER.info("Not actually making request to wattbox host (noop_set_state)")
