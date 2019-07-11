@@ -1,3 +1,4 @@
 *.pyc
 dot.env
 __pycache__
+test-env

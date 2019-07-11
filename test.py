@@ -23,3 +23,11 @@ W = WattBox(environ['WATTBOX_HOSTNAME'], environ['WATTBOX_USERNAME'], environ['W
 W.load_xml()
 print(W.switches)
 W.switches[0].set_state(True)
+v = W.voltage
+a = W.current
+w = W.power
+
+print("{v} V * {a} A =~ {w} W".format(v=v,a=a,w=w))
+
+if abs(v*a*.8 - w) > (.1 * v *a):
+    print("Voltage * Amps should equal Wattage but does not")

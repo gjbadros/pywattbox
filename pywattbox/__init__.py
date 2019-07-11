@@ -9,6 +9,12 @@ $ pip3 install --upgrade .../path/to/pywattbox
 
 Then the component/wattbox.py and its require line will work.
 
+TODO: Parse voltage_value (1200 = 120V; it's in tenths of volts)
+      Parse current_value (105 = 10.5A; it's in tengths of amps)
+      Parse power_value (600 = 600W; it's in watts)
+
+And create a sensor for the watts (and maybe the others)
+
 """
 
 __Author__ = "Greg J. Badros <badros@gmail.com>"
@@ -32,36 +38,6 @@ def xml_escape(s):
     answer = answer.replace("&", "&amp;")
     return answer
 
-class WattBoxXmlParser(object):
-    """The parser for WattBox XML status output."""
-
-    # pylint: disable=too-few-public-methods, too-many-instance-attributes
-    def __init__(self, wattbox, xml_str):
-        """Initializes the XML parser."""
-        self.wattbox = wattbox
-        self._xml_str = xml_str
-        self.switches = []
-        self.hostname = None
-        self.hardware_version = None
-        self.serial_number = None
-        self.has_ups = False
-
-    def parse(self):
-        """Main entrypoint into the parser. It gets the state of the strip."""
-
-        import xml.etree.ElementTree as ET
-
-        root = ET.fromstring(self._xml_str)
-        self.hostname = root.find('host_name').text
-        self.hardware_version = root.find('hardware_version').text
-        self.serial_number = root.find('serial_number').text
-        self.has_ups = root.find('hasUPS').text == '1'
-        outlet_names = root.find('outlet_name').text.split(',')
-        outlet_status = root.find('outlet_status').text.split(',')
-        for (i, (name, state)) in enumerate(zip(outlet_names, outlet_status)):
-            self.switches.append(Switch(self.wattbox, i, name, state == '1'))
-        return True
-
 
 class WattBox(object):
     """Main WattBox class.
@@ -69,6 +45,26 @@ class WattBox(object):
     This object owns the connection to the wattbox power strip, handles
     reading status, and issuing state changes.
     """
+
+    def parse(self, xml_str):
+        """Main entrypoint into the parser. It gets the state of the strip."""
+
+        import xml.etree.ElementTree as ET
+
+        root = ET.fromstring(xml_str)
+        self._hostname = root.find('host_name').text
+        self._hardware_version = root.find('hardware_version').text
+        self._serial_number = root.find('serial_number').text
+        self._has_ups = root.find('hasUPS').text == '1'
+        self._voltage = int(root.find('voltage_value').text)/10
+        self._current = int(root.find('current_value').text)/10
+        self._power = int(root.find('power_value').text)
+        self._cloud_status = root.find('cloud_status').text == '1'
+        outlet_names = root.find('outlet_name').text.split(',')
+        outlet_status = root.find('outlet_status').text.split(',')
+        for (i, (name, state)) in enumerate(zip(outlet_names, outlet_status)):
+            self._switches.append(Switch(self, i, name, state == '1'))
+        return True
 
     # pylint: disable=too-many-instance-attributes, too-many-arguments
     def __init__(self, host, username, password, area='',
@@ -83,8 +79,13 @@ class WattBox(object):
         self._hardware_version = None
         self._serial_number = None
         self._has_ups = None
-        self.__last_updated = None
-        self._switches = None
+        self._last_updated = None
+        self._switches = []
+        self._has_ups = False
+        self._voltage = None
+        self._current = None
+        self._power = None
+        self._cloud_status = None
 
     def load_xml(self):
         """Load the WattBox status from the device."""
@@ -97,26 +98,35 @@ class WattBox(object):
             raise
         xml_str = response.text
         _LOGGER.debug("Loaded xml status = %s", xml_str)
-        parser = WattBoxXmlParser(self, xml_str)
         try:
-            parser.parse()
+            self.parse(xml_str)
         except Exception as e:
             _LOGGER.warning("Could not parse WattBox %s response", self._hostname)
             raise
 
-        _LOGGER.debug('Found wattbox with %d outlets', len(parser.switches))
-        self._switches = parser.switches
-        self._hostname = parser.hostname
-        self._hardware_version = parser.hardware_version
-        self._serial_number = parser.serial_number
-        self._has_ups = parser.has_ups
-        self.__last_updated = mktime(localtime())
+        _LOGGER.debug('Found wattbox with %d outlets', len(self._switches))
+        self._last_updated = mktime(localtime())
         return True
 
     @property
     def switches(self):
         """Return the full list of outputs in the controller."""
         return self._switches
+
+    @property
+    def voltage(self):
+        """Return the reported voltage in Volts."""
+        return self._voltage
+
+    @property
+    def current(self):
+        """Return the reported current in Amps."""
+        return self._current
+
+    @property
+    def power(self):
+        """Return the reported power in Watts."""
+        return self._power
 
     @property
     def host(self):
@@ -127,7 +137,7 @@ class WattBox(object):
         now = mktime(localtime())
 
         if xml_str is None:
-            if now - self.__last_updated < 3:
+            if now - self._last_updated < 3:
                 return
             url = 'http://{h}/control.cgi'.format(h=self._host)
             _LOGGER.debug("update Sending wattbox %s url %s", self._hostname, url)
@@ -146,7 +156,7 @@ class WattBox(object):
         for (i, val) in enumerate(vals):
             # pylint: disable=protected-access
             self._switches[i]._on = (val == '1')
-        self.__last_updated = now
+        self._last_updated = now
 
 
 class Switch(object):
@@ -167,6 +177,10 @@ class Switch(object):
     def name(self, value):
         """Set the name."""
         self._name = value
+
+    @property
+    def outlet_num(self):
+        return self._outlet_num
 
     @property
     def is_on(self):
