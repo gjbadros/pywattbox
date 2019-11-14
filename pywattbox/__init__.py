@@ -38,30 +38,46 @@ def xml_escape(s):
     answer = answer.replace("&", "&amp;")
     return answer
 
+def _t(root, name):
+    """Return the element named NAME's text or None."""
+    e = root.find(name)
+    if e is None:
+        return None
+    return e.text
 
-class WattBox(object):
+def _i(root, name):
+    """Return the element named NAME's text as an int/10 or None."""
+    e = root.find(name)
+    if e is None:
+        return None
+    return int(e.text)/10
+
+class WattBox:
     """Main WattBox class.
 
     This object owns the connection to the wattbox power strip, handles
     reading status, and issuing state changes.
     """
 
+
+
     def parse(self, xml_str):
         """Main entrypoint into the parser. It gets the state of the strip."""
 
         import xml.etree.ElementTree as ET
+        _LOGGER.debug("wattbox %s parse: %s", self, xml_str)
 
         root = ET.fromstring(xml_str)
-        self._hostname = root.find('host_name').text
-        self._hardware_version = root.find('hardware_version').text
-        self._serial_number = root.find('serial_number').text
-        self._has_ups = root.find('hasUPS').text == '1'
-        self._voltage = int(root.find('voltage_value').text)/10
-        self._current = int(root.find('current_value').text)/10
-        self._power = int(root.find('power_value').text)
-        self._cloud_status = root.find('cloud_status').text == '1'
-        outlet_names = root.find('outlet_name').text.split(',')
-        outlet_status = root.find('outlet_status').text.split(',')
+        self._hostname = _t(root, 'host_name')
+        self._hardware_version = _t(root, 'hardware_version')
+        self._serial_number = _t(root, 'serial_number')
+        self._has_ups = _t(root, 'hasUPS')
+        self._voltage = _i(root, 'voltage_value')
+        self._current = _i(root, 'current_value')
+        self._power = _i(root, 'power_value')
+        self._cloud_status = _t(root, 'cloud_status') == '1'
+        outlet_names = _t(root, 'outlet_name').split(',')
+        outlet_status = _t(root, 'outlet_status').split(',')
         for (i, (name, state)) in enumerate(zip(outlet_names, outlet_status)):
             self._switches.append(Switch(self, i, name, state == '1'))
         return True
@@ -159,7 +175,7 @@ class WattBox(object):
         self._last_updated = now
 
 
-class Switch(object):
+class Switch:
     """Wattbox Switch represents a single IP-controlled outlet
     that can be turned on or off."""
     def __init__(self, wattbox, offset, name, on):
@@ -180,6 +196,7 @@ class Switch(object):
 
     @property
     def outlet_num(self):
+        """Return the 1-based outlet number of this switch."""
         return self._outlet_num
 
     @property
