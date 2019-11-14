@@ -1,4 +1,4 @@
-pywattbox 0.0.3
+pywattbox 0.0.5
 ===============
 A simple Python library for controlling a WattBox IP-controlled outlet.
 
